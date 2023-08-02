@@ -1,0 +1,41 @@
+#!/bin/sh
+BOARD="$1"
+THREAD="$2"
+API_URL="https://a.4cdn.org/"$BOARD"/thread/"$THREAD".json"
+TMPFILE="/tmp/$THREAD.json"
+
+_help() {
+	printf "\033[1;32m4chan Downloader\033[0m 🍀 by \033[1;34mswindlesmccoop\033[0m
+-------------------------------------
+Usage: ./dlthread [board] [thread id]\n"
+	exit
+}
+
+case "$1" in
+	-h) _help ;;
+	"") _help ;;
+esac
+
+curl -s "$API_URL" | jq > "$TMPFILE"
+TITLE="$(grep '"sub.*' "$TMPFILE" | sed -e 's/      "sub": "//; s/",//')"
+
+URLS="$(grep -P '"tim":|"ext":' $TMPFILE | sed 'N;s/\(.*\)\n\(.*\)/\2\n\1/' | sed -e "/\"tim\"/ {N; s/\n//;}; s/      //g; s/\"tim\": //; s/,\"ext\": \"//; s/\",//; s/^/https:\/\/i.4cdn.org\/$BOARD\//")"
+
+mkdir -p "$BOARD"/"$THREAD"
+cd "$BOARD"/"$THREAD"
+
+for url in $URLS; do
+	FILENAME="$(printf "$url" | grep -o /"$BOARD/.*$" | sed "s|/$BOARD/||")"
+	TIM="$(printf "$url" | sed -e "s/.*$BOARD//; s/\///; s/\..*//")"
+	EXT="$(grep -B 5 "$TIM" $TMPFILE | head -n 1 | sed 's/"ext": "//; s/",//')"
+	OGNAME="$(grep -B 6 "$TIM" $TMPFILE | head -n 1 | sed 's/"filename": "//; s/",//')"
+	OUTPUT="$(printf "%s%s" $OGNAME $EXT | sed 's/ //')"
+	printf "Downloading \033[0;32m"$OUTPUT"\033[0m..."
+	if [ -f "$OUTPUT" ]; then
+		printf "already exists, skipping.\n"
+		continue
+	else
+		curl -so "$OUTPUT" "$url"
+		printf "done.\n"
+	fi
+done
